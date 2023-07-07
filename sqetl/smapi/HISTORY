@@ -1,0 +1,15 @@
+SMAPI 2.4
+Changes after smapi 2.2
+
+1. MAJOR feature improvements:
+   - optimize memory usage for huge jam areas;
+   - advanced MsgId generation;
+   - new function: CheckSmapiVersion();
+   - change license terms to LGPL in agreement with Scott Dudley
+
+2. IMPORTANT bugfixes:
+   - remove obsolete/buggy code for semaphores support;
+   - fixes for reading corrupted jam areas.
+
+
+$Id: HISTORY,v 1.2.2.1 2003/02/20 12:07:46 stas_degteff Exp $
