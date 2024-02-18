@@ -5,7 +5,7 @@
 CC=	gcc
 CFLAGS=	-Wall -funsigned-char
 CDEFS=	-DUNIX -D__LINUX__
-COPT=	-O3
+COPT=	-g -O0
 OBJ=	.o
 
 # on i386, you may add this

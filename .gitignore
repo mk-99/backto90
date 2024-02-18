@@ -171,3 +171,10 @@ pocs
 
 .DS_Store
 alembic.ini
+
+# squish database
+*.sqd
+*.sqi
+
+# VSCode, LLVM
+*.dSYM
