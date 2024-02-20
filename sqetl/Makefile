@@ -3,10 +3,10 @@
 # No support for the Husky build environment
 
 CC=	gcc
-CFLAGS=	-Wall -funsigned-char
+CFLAGS=	-g -O0 -Wall -funsigned-char
 CDEFS=	-DUNIX -D__LINUX__
 # COPT=	-O3 -Lsmapi -lsmapilnx
-COPT= -g -O0 -Lsmapi -lsmapilnx
+COPT= -Lsmapi -Lcjson -lsmapilnx -lcjson
 OBJ=	.o
 
 # on i386, you may add this
