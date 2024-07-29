@@ -6,15 +6,15 @@ CDEFS = -DUNIX -D__LINUX__
 COPT = -Lsmapi -Lcjson -lsmapilnx -lcjson -largp
 OBJ = .o
 
-TARGET = makesqbase
+TARGET = makesqbase readsqbase
 
 all: $(TARGET)
 
 makesqbase: makesqbase.c
-	$(CC) $(CFLAGS) $(CDEFS) $(COPT) -o $(TARGET) makesqbase.c
+	$(CC) $(CFLAGS) $(CDEFS) $(COPT) -o makesqbase makesqbase.c
 
-sqcmdline: sqcmdline.c
-	$(CC) $(CFLAGS) $(CDEFS) $(COPT) -o sqcmdline sqcmdline.c
+readsqbase: readsqbase.c
+	$(CC) $(CFLAGS) $(CDEFS) $(COPT) -o readsqbase readsqbase.c
 
 clean:
 	-rm -f *.o

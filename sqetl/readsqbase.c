@@ -22,7 +22,7 @@ enum {
 
 const char *argp_program_version = "readsqbase 0.1.0";
 static char doc[] = "reads squish message base to json";
-static char args_doc[] = "infile";
+static char args_doc[] = "inarea";
 
 // cli argument availble options.
 static struct argp_option options[] = {
@@ -300,6 +300,7 @@ int main(int argc, char *argv[])
 {
     struct _minf msgapi_info;
     HAREA in_area;
+    HMSG in_msg;
 
     // Set of messages
     char *msg_string;
@@ -327,34 +328,21 @@ int main(int argc, char *argv[])
         exit(ERR_AREA);
     };
     MsgLock(in_area);
+    num_messages = MsgHighMsg(in_area);
 
-
-    // Write messages to out area
-    for(i = 0; i < num_messages; i++) {
-        current_message = cJSON_GetArrayItem(msg_json, i);
-        if (!cJSON_IsObject(current_message)) {
-            fprintf(stderr, "invalid format, not an object\n");
-            exit(ERR_JSON);
-        }
-
-        src_addr = get_json_netaddr(current_message, "src");
-        dst_addr = get_json_netaddr(current_message, "dst");
-
-        snt_datetime = get_json_string(current_message, "snt_datetime");
-        rcv_datetime = get_json_string(current_message, "rcv_datetime");
-        from_name = get_json_string(current_message, "from_name");
-        to_name = get_json_string(current_message, "to_name");
-        subj = get_json_string(current_message, "subj");
-        text = get_json_string(current_message, "text");
+    for(i = 1; i <= num_messages; i++ ) {
+        in_msg = MsgOpenMsg(in_area, MOPEN_READ, i);
 
         if (arguments.verbose) {
-            show_message(i, src_addr, dst_addr, from_name, to_name, snt_datetime, rcv_datetime, subj, text);
+            printf("Message %d\n", i);
         }
-        append_message(out_area, src_addr, dst_addr, from_name, to_name, subj, text);
+
+        MsgCloseMsg(in_msg);
+
     }
 
-    MsgUnlock(out_area);
-    MsgCloseArea(out_area);
+    MsgUnlock(in_area);
+    MsgCloseArea(in_area);
     MsgCloseApi();
 
     return 0;
