@@ -1,9 +1,10 @@
-// Create Squish message base from plain text
+// Create Squish message base from plain text or json
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <argp.h>
 
 #include "smapi/msgapi.h"
 
@@ -14,21 +15,74 @@
 
 enum {
     ERR_AREA=1,
-    ERR_MSG=2
+    ERR_MSG=2,
+    ERR_JSON=3,
+    ERR_INPUT=4
 };
 
-char *body_text = "This is test message body";
+const char *argp_program_version = "makesqbase 0.1.0";
+static char doc[] = "makes squish message base from json";
+static char args_doc[] = "infile";
 
-char *area_name = "test";
+// cli argument availble options.
+static struct argp_option options[] = {
+    {"verbose", 'v', 0, 0, "Produce verbose output"},
+    {"outfile", 'o', "outfile", 0, "base filename (area name) for squish database"},
+    {0}
+};
+
+
+// define a struct to hold the arguments.
+struct arguments {
+    int  verbose;
+    char *args[1];
+    char *outfile;
+};
+
+
+// define a function which will parse the args.
+static error_t parse_opt(int key, char *arg, struct argp_state *state)
+{
+    struct arguments *arguments = state->input;
+    switch(key) {
+        case 'v':
+            arguments->verbose = 1;
+            break;
+
+        case 'o':
+            arguments->outfile = arg;
+            break;
+
+        case ARGP_KEY_ARG:        
+            if(state->arg_num > 1) // Too many arguments
+                argp_usage(state);
+            arguments->args[state->arg_num] = arg;
+            break;
+
+        case ARGP_KEY_END:
+            if(state->arg_num < 1) // Not enough arguments
+                argp_usage(state);
+            break;
+
+        default:
+            return ARGP_ERR_UNKNOWN;
+    }
+
+    return 0;
+}
+
+
+// initialize the argp struct. Which will be used to parse and use the args.
+static struct argp argp = {options, parse_opt, args_doc, doc};
 
 int append_message(
     HAREA out_area,
     NETADDR *src,
     NETADDR *dst,
-    char *from,
-    char *to,
-    char *subj,
-    char *body_text
+    const char *from,
+    const char *to,
+    const char *subj,
+    const char *body_text
 )
 {
     XMSG msg;
@@ -50,13 +104,44 @@ int append_message(
     memmove(&msg.orig, src, sizeof(msg.orig));
     // msg.date_arrived = 0;
     // msg.date_written = 0;
-    strncpy(msg.from, from, sizeof(msg.from) - 1);
-    strncpy(msg.to, to, sizeof(msg.to) - 1);
-    strncpy(msg.subj, subj, sizeof(msg.subj) - 1);
+    strncpy((char *)msg.from, from, sizeof(msg.from) - 1);
+    strncpy((char *)msg.to, to, sizeof(msg.to) - 1);
+    strncpy((char *)msg.subj, subj, sizeof(msg.subj) - 1);
 
-    MsgWriteMsg(out_msg, false, &msg, body_text, msg_len, msg_len * 2, 0, 0);
+    MsgWriteMsg(out_msg, false, &msg, (unsigned char *)body_text, msg_len, msg_len * 2, 0, 0);
 
     MsgCloseMsg(out_msg);
+
+    return 0;
+}
+
+int show_message(
+    int number,
+    NETADDR *src_addr,
+    NETADDR *dst_addr,
+    char *from_name,
+    char *to_name,
+    char *snt_datetime,
+    char *rcv_datetime,
+    char *subj,
+    char *text
+)
+{
+    printf("===== message number %d\n", number);
+
+    printf("Sent %s\n", snt_datetime);
+    printf("Received %s\n", rcv_datetime);
+
+    printf("From %s ", from_name);
+    printf("%d:%d/%d.%d\n", src_addr->zone, src_addr->net, src_addr->node, src_addr->point);
+
+    printf("To %s ", to_name);
+    printf("%d:%d/%d.%d\n", dst_addr->zone, dst_addr->net, dst_addr->node, dst_addr->point);
+
+    printf("Subj %s\n", subj);
+    printf("%s\n", text);
+
+    printf("\n");
 
     return 0;
 }
@@ -69,22 +154,22 @@ cJSON *parse_msg_json(char *msg_str)
         const char *error_ptr = cJSON_GetErrorPtr();
         if (error_ptr != NULL) {
             fprintf(stderr, "Error before: %s\n", error_ptr);
-            exit(1);
+            exit(ERR_JSON);
         }
         else {
             fprintf(stderr, "invalid format, empty array\n");
-            exit(1);
+            exit(ERR_JSON);
         }
     }
     if (!cJSON_IsArray(msg_json)) {
             fprintf(stderr, "invalid format, not an array\n");
-            exit(1);
+            exit(ERR_JSON);
     }
 
     return msg_json;
 }
 
-// Read stdin to string, dynamically allocated, must be freed
+// Read file to string, dynamically allocated, must be freed
 char *read_to_string(char *filename)
 {
     size_t pos = 0, size = 8192, nread;
@@ -99,7 +184,7 @@ char *read_to_string(char *filename)
     else if (*filename == '\0') {
         input_file = stdin;
     }
-    else if (strncmp(filename, "-", 2) == 0) {
+    else if ((strlen(filename) == 1) && (*filename == '-')) {
         input_file = stdin;
     }
     else {
@@ -107,7 +192,7 @@ char *read_to_string(char *filename)
     }
 
     if (input_file == NULL) {
-        fprintf(stderr, "cannot open input file for reading\n");
+        perror("Cannot open input file for reading");
         exit(1);
     }
 
@@ -115,7 +200,7 @@ char *read_to_string(char *filename)
         if (buf == NULL) {
             fprintf(stderr, "not enough memory for %zu bytes\n", size);
             free(buf0);
-            exit(1);
+            exit(ERR_INPUT);
         }
         nread = fread(buf + pos, 1, size - pos - 1, input_file);
         if (nread == 0)
@@ -129,7 +214,7 @@ char *read_to_string(char *filename)
             if (buf == NULL) {
                 fprintf(stderr, "not enough memory for %zu bytes\n", size);
                 free(buf0);
-                exit(1);
+                exit(ERR_INPUT);
             }
         }
     }
@@ -147,7 +232,7 @@ char *get_json_string(const cJSON * const current_item, const char *tag)
     }
     else {
         fprintf(stderr, "get_json_string: invalid format, not a string");
-        exit(1);
+        exit(ERR_JSON);
     }
 }
 
@@ -161,7 +246,7 @@ int get_json_int(const cJSON * const current_item, const char *tag)
     }
     else {
         fprintf(stderr, "get_json_string: invalid format, not a number");
-        exit(1);
+        exit(ERR_JSON);
     }
 }
 
@@ -178,7 +263,7 @@ int get_json_int_or_null(const cJSON * const current_item, const char *tag)
     }
     else {
         fprintf(stderr, "get_json_string: invalid format, not a number");
-        exit(1);
+        exit(ERR_JSON);
     }
 }
 
@@ -195,7 +280,7 @@ NETADDR *get_json_netaddr(const cJSON * const current_item, const char *tag)
         addr = malloc(sizeof(NETADDR));
         if (addr == NULL) {
             fprintf(stderr, "cannot allocate memory for addr");
-            exit(1);
+            exit(ERR_JSON);
         }
         addr->zone = get_json_int(addr_object, "zone");
         addr->net = get_json_int(addr_object, "net");;
@@ -206,7 +291,7 @@ NETADDR *get_json_netaddr(const cJSON * const current_item, const char *tag)
     }
     else {
         fprintf(stderr, "get_json_string: invalid format, not a string");
-        exit(1);
+        exit(ERR_JSON);
     }
 }
 
@@ -226,30 +311,35 @@ int main(int argc, char *argv[])
 
     int num_messages, i;
 
-    msg_string = read_to_string(argv[1]);
+    // Parse command line arguments
+    struct arguments arguments;
+    arguments.verbose = 0;
+    arguments.outfile = "";
+    argp_parse(&argp, argc, argv, 0, 0, &arguments);
+
+    // Parse input json
+    msg_string = read_to_string(arguments.args[0]);
     msg_json = parse_msg_json(msg_string);
-
     num_messages = cJSON_GetArraySize(msg_json);
-
 
     // Initialize msgapi and create message base
     memset(&msgapi_info, 0, sizeof(msgapi_info));
     msgapi_info.def_zone = DEFAULT_ZONE;
     MsgOpenApi(&msgapi_info);
-    out_area = MsgOpenArea(area_name, MSGAREA_CREATE, MSGTYPE_SQUISH);
+    out_area = MsgOpenArea((unsigned char *)arguments.outfile, MSGAREA_CREATE, MSGTYPE_SQUISH);
     if (!out_area) {
         perror("Cannot create area: ");
         exit(ERR_AREA);
     };
-
     MsgLock(out_area);
 
 
+    // Write messages to out area
     for(i = 0; i < num_messages; i++) {
         current_message = cJSON_GetArrayItem(msg_json, i);
         if (!cJSON_IsObject(current_message)) {
             fprintf(stderr, "invalid format, not an object\n");
-            exit(1);
+            exit(ERR_JSON);
         }
 
         src_addr = get_json_netaddr(current_message, "src");
@@ -262,27 +352,13 @@ int main(int argc, char *argv[])
         subj = get_json_string(current_message, "subj");
         text = get_json_string(current_message, "text");
 
-        printf("==========================\n");
-        printf("Message number %d\n", i);
-
-        printf("Sent %s\n", snt_datetime);
-        printf("Received %s\n", rcv_datetime);
-
-        printf("From %s\n", from_name);
-        printf("Source address %d:%d/%d.%d\n", src_addr->zone, src_addr->net, src_addr->node, src_addr->point);
-
-        printf("To %s\n", to_name);
-        printf("Destination address %d:%d/%d.%d\n", dst_addr->zone, dst_addr->net, dst_addr->node, dst_addr->point);
-
-        printf("Subj %s\n", subj);
-        printf("Text %s\n", text);
-
-        printf("\n\n\n\n");
-
-        printf("Writing to database.....\n");
+        if (arguments.verbose) {
+            show_message(i, src_addr, dst_addr, from_name, to_name, snt_datetime, rcv_datetime, subj, text);
+        }
         append_message(out_area, src_addr, dst_addr, from_name, to_name, subj, text);
     }
 
+    MsgUnlock(out_area);
     MsgCloseArea(out_area);
     MsgCloseApi();
 

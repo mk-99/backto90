@@ -357,7 +357,7 @@ static unsigned near _SquishCreateNewBase(HAREA ha, byte  *szName)
 
   /* Try to open the files */
 
-  if (!_SquishOpenBaseFiles(ha, szName, O_CREAT | O_EXCL))
+  if (!_SquishOpenBaseFiles(ha, szName, O_CREAT))
     return FALSE; /* File exists or i/o error */
 
   if (!_SquishFillBaseHeader(&sqb, szName) ||

@@ -1,28 +1,23 @@
-# $Id: makefile.lnx,v 1.32 2002/11/12 13:47:21 stas_degteff Exp $
-# Legacy makefile for building on Linux with gcc
-# No support for the Husky build environment
+#
 
-CC=	gcc
-CFLAGS=	-g -O0 -Wall -funsigned-char
-CDEFS=	-DUNIX -D__LINUX__
-# COPT=	-O3 -Lsmapi -lsmapilnx
-COPT= -Lsmapi -Lcjson -lsmapilnx -lcjson
-OBJ=	.o
+CC = gcc
+CFLAGS = -g -O0 -Wall -funsigned-char
+CDEFS = -DUNIX -D__LINUX__
+COPT = -Lsmapi -Lcjson -lsmapilnx -lcjson -largp
+OBJ = .o
 
-# on i386, you may add this
-# -fomit-frame-pointer -fstrength-reduce -fPIC -m486
-
-TARGET=	makesqbase
+TARGET = makesqbase
 
 all: $(TARGET)
 
-# Thunderbirds are go!
-
-$(TARGET):
+makesqbase: makesqbase.c
 	$(CC) $(CFLAGS) $(CDEFS) $(COPT) -o $(TARGET) makesqbase.c
 
+sqcmdline: sqcmdline.c
+	$(CC) $(CFLAGS) $(CDEFS) $(COPT) -o sqcmdline sqcmdline.c
+
 clean:
-	-rm *.o
+	-rm -f *.o
 
 distclean: clean
-	-rm $(TARGET)
+	-rm -f $(TARGET)

@@ -57,30 +57,32 @@ class FidoMessageProvider(BaseProvider):
     def fido_message(self) -> Fido_message:
         """Generate fido message with fake components"""
 
-        fake = Faker()
+        fake = Faker('ru_RU') # For subj and body
+        fake_en = Faker('en_US') # For respondent's names
         Faker.seed()
         fake.add_provider(FidoAddressProvider)
-        snt_datetime = fake.date_time_between(
+        snt_datetime = fake_en.date_time_between(
             datetime(year=1987, month=1, day=1),
             datetime(year=2000, month=12, day=31)
         )
-        rcv_datetime = fake.date_time_between(
-            snt_datetime,
+        rcv_datetime = fake_en.date_time_between(
+            snt_datetime + timedelta(seconds=10),
             snt_datetime + timedelta(hours=8)
         )
 
         return Fido_message(
             src=fake.fido_address(),
             dst=fake.fido_address(),
-            from_name=fake.name(),
-            to_name=fake.name(),
+            from_name=fake_en.name(),
+            to_name=fake_en.name(),
             snt_datetime=snt_datetime,
             rcv_datetime=rcv_datetime, 
-            subj=fake.sentence(nb_words=8, variable_nb_words=True),
+            subj=fake.sentence(nb_words=6, variable_nb_words=True),
             text=fake.text(max_nb_chars=1500)
         )
 
 class Fido_json_encoder(json.JSONEncoder):
+    """JSON encoder for Fido messages"""
     def default(self, o):
         if is_dataclass(o):
             return asdict(o)
@@ -93,19 +95,19 @@ class Fido_json_encoder(json.JSONEncoder):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate fake Fido messages, in text or in JSON format')
-    parser.add_argument("-n", "--number", type=int, required=False, default=50, help="number of messages to generate")
+    parser.add_argument("-n", "--number", type=int, required=False, default=50, help="number of messages to generate, 50 by default")
     parser.add_argument("-j", "--json", action="store_true", required=False, help="output in json format (default is text)")
     args = parser.parse_args()
 
     fake = Faker()
-    fake.add_provider(FidoAddressProvider)
+    Faker.seed()
     fake.add_provider(FidoMessageProvider)
 
     if args.json:
         msg_list = []
         for _ in range(args.number):
             msg_list.append(asdict(fake.fido_message()))
-        print(json.dumps(msg_list, cls=Fido_json_encoder))
+        print(json.dumps(msg_list, cls=Fido_json_encoder, ensure_ascii=False))
     else:
         for _ in range(args.number):
             print(fake.fido_message())
