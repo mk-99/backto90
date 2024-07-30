@@ -7,8 +7,9 @@
 #include <argp.h>
 
 #include "smapi/msgapi.h"
-
 #include "cjson/cJSON.h"
+
+#include "fconv.h"
 
 #define DEFAULT_ZONE 2
 #define BUFSIZE 4096
@@ -79,20 +80,26 @@ static struct argp argp = {options, parse_opt, args_doc, doc};
 int convert_message(HMSG hmsg, XMSG *msg, dword text_len, char *text, dword ctrl_len, char *ctrl)
 {
     dword i;
+    char *subj_decoded, *text_decoded;
+    size_t n_conv;
+
 
     printf("Src address: %d:%d/%d.%d\n", msg->orig.zone, msg->orig.net, msg->orig.node, msg->orig.point);
     printf("Dst address: %d:%d/%d.%d\n", msg->dest.zone, msg->dest.net, msg->dest.node, msg->dest.point);
     printf("From: %s\n", msg->from);
     printf("To: %s\n", msg->to);
-    printf("Subj: %s\n", msg->subj);
 
-    printf("Body: ");
-    for (i = 0; i < text_len; i++) {
-        if (text[i] == 0) {
-            break;
-        }
-        putchar(text[i]);
-    }
+    subj_decoded = malloc(sizeof(msg->subj) * 2);
+    n_conv = fconv(msg->subj, subj_decoded, sizeof(msg->subj), FCONV_TO_UTF8);
+    subj_decoded[n_conv] = '\0';
+    printf("Subj: %s\n", subj_decoded);
+    free(subj_decoded);
+
+    text_decoded = malloc(text_len * 2 + 1);
+    n_conv = fconv(text, text_decoded, text_len, FCONV_TO_UTF8);
+    text_decoded[n_conv] = '\0';
+    printf("Body: %s\n", text_decoded);
+    free(text_decoded);
 
     printf("\n");
 

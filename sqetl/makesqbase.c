@@ -7,8 +7,9 @@
 #include <argp.h>
 
 #include "smapi/msgapi.h"
-
 #include "cjson/cJSON.h"
+
+#include "fconv.h"
 
 #define DEFAULT_ZONE 2
 #define BUFSIZE 4096
@@ -79,15 +80,23 @@ int append_message(
     HAREA out_area,
     NETADDR *src,
     NETADDR *dst,
-    const char *from,
-    const char *to,
-    const char *subj,
-    const char *body_text
+    char *from,
+    char *to,
+    char *subj,
+    char *body_text
 )
 {
     XMSG msg;
     HMSG out_msg;
     dword msg_len = 0;
+
+    char *subj_encoded, *body_encoded;
+
+    subj_encoded = malloc(strlen(subj) * 2);
+    body_encoded = malloc(strlen(body_text) * 2);
+
+    fconv(subj, subj_encoded, strlen(subj), FCONV_FROM_UTF8);
+    fconv(body_text, body_encoded, strlen(body_text), FCONV_FROM_UTF8);
 
     out_msg = MsgOpenMsg(out_area, MOPEN_CREATE, 0);
     if (!out_msg) {
@@ -96,7 +105,7 @@ int append_message(
         exit(ERR_MSG);
     }
 
-    msg_len = (dword)strlen(body_text);
+    msg_len = (dword)strlen(body_encoded);
 
     memset(&msg, 0, sizeof(msg));
     msg.attr = 0;
@@ -106,11 +115,14 @@ int append_message(
     // msg.date_written = 0;
     strncpy((char *)msg.from, from, sizeof(msg.from) - 1);
     strncpy((char *)msg.to, to, sizeof(msg.to) - 1);
-    strncpy((char *)msg.subj, subj, sizeof(msg.subj) - 1);
+    strncpy((char *)msg.subj, subj_encoded, sizeof(msg.subj) - 1);
 
-    MsgWriteMsg(out_msg, false, &msg, (unsigned char *)body_text, msg_len, msg_len * 2, 0, 0);
+    MsgWriteMsg(out_msg, false, &msg, (unsigned char *)body_encoded, msg_len, msg_len, 0, 0);
 
     MsgCloseMsg(out_msg);
+
+    free(body_encoded);
+    free(subj_encoded);
 
     return 0;
 }
