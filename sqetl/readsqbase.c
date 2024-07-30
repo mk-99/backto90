@@ -75,224 +75,37 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
 // initialize the argp struct. Which will be used to parse and use the args.
 static struct argp argp = {options, parse_opt, args_doc, doc};
 
-int append_message(
-    HAREA out_area,
-    NETADDR *src,
-    NETADDR *dst,
-    const char *from,
-    const char *to,
-    const char *subj,
-    const char *body_text
-)
+// Convert message to json
+int convert_message(HMSG hmsg, XMSG *msg, dword text_len, char *text, dword ctrl_len, char *ctrl)
 {
-    XMSG msg;
-    HMSG out_msg;
-    dword msg_len = 0;
+    dword i;
 
-    out_msg = MsgOpenMsg(out_area, MOPEN_CREATE, 0);
-    if (!out_msg) {
-        perror("Error writing to output area: ");
-        MsgCloseApi();
-        exit(ERR_MSG);
+    printf("Src address: %d:%d/%d.%d\n", msg->orig.zone, msg->orig.net, msg->orig.node, msg->orig.point);
+    printf("Dst address: %d:%d/%d.%d\n", msg->dest.zone, msg->dest.net, msg->dest.node, msg->dest.point);
+    printf("From: %s\n", msg->from);
+    printf("To: %s\n", msg->to);
+    printf("Subj: %s\n", msg->subj);
+
+    printf("Body: ");
+    for (i = 0; i < text_len; i++) {
+        if (text[i] == 0) {
+            break;
+        }
+        putchar(text[i]);
     }
 
-    msg_len = (dword)strlen(body_text);
+    printf("\n");
 
-    memset(&msg, 0, sizeof(msg));
-    msg.attr = 0;
-    memmove(&msg.dest, dst, sizeof(msg.dest));
-    memmove(&msg.orig, src, sizeof(msg.orig));
-    // msg.date_arrived = 0;
-    // msg.date_written = 0;
-    strncpy((char *)msg.from, from, sizeof(msg.from) - 1);
-    strncpy((char *)msg.to, to, sizeof(msg.to) - 1);
-    strncpy((char *)msg.subj, subj, sizeof(msg.subj) - 1);
-
-    MsgWriteMsg(out_msg, false, &msg, (unsigned char *)body_text, msg_len, msg_len * 2, 0, 0);
-
-    MsgCloseMsg(out_msg);
-
-    return 0;
-}
-
-int show_message(
-    int number,
-    NETADDR *src_addr,
-    NETADDR *dst_addr,
-    char *from_name,
-    char *to_name,
-    char *snt_datetime,
-    char *rcv_datetime,
-    char *subj,
-    char *text
-)
-{
-    printf("===== message number %d\n", number);
-
-    printf("Sent %s\n", snt_datetime);
-    printf("Received %s\n", rcv_datetime);
-
-    printf("From %s ", from_name);
-    printf("%d:%d/%d.%d\n", src_addr->zone, src_addr->net, src_addr->node, src_addr->point);
-
-    printf("To %s ", to_name);
-    printf("%d:%d/%d.%d\n", dst_addr->zone, dst_addr->net, dst_addr->node, dst_addr->point);
-
-    printf("Subj %s\n", subj);
-    printf("%s\n", text);
+    printf("Control info: ");
+    for (i = 0; i < ctrl_len; i++) {
+        if (ctrl[i] == 0)
+            break;
+        putchar(ctrl[i]);
+    }
 
     printf("\n");
 
     return 0;
-}
-
-// Parse messages as json string, returns cJSON struct pointer, must be freed
-cJSON *parse_msg_json(char *msg_str)
-{
-    cJSON *msg_json = cJSON_Parse(msg_str);
-    if (msg_json == NULL) {
-        const char *error_ptr = cJSON_GetErrorPtr();
-        if (error_ptr != NULL) {
-            fprintf(stderr, "Error before: %s\n", error_ptr);
-            exit(ERR_JSON);
-        }
-        else {
-            fprintf(stderr, "invalid format, empty array\n");
-            exit(ERR_JSON);
-        }
-    }
-    if (!cJSON_IsArray(msg_json)) {
-            fprintf(stderr, "invalid format, not an array\n");
-            exit(ERR_JSON);
-    }
-
-    return msg_json;
-}
-
-// Read file to string, dynamically allocated, must be freed
-char *read_to_string(char *filename)
-{
-    size_t pos = 0, size = 8192, nread;
-    char *buf0 = malloc(size);
-    char *buf = buf0;
-
-    FILE *input_file = NULL;
-
-    if (filename == NULL) {
-        input_file = stdin;
-    }
-    else if (*filename == '\0') {
-        input_file = stdin;
-    }
-    else if ((strlen(filename) == 1) && (*filename == '-')) {
-        input_file = stdin;
-    }
-    else {
-        input_file = fopen(filename, "r");
-    }
-
-    if (input_file == NULL) {
-        perror("Cannot open input file for reading");
-        exit(1);
-    }
-
-    for (;;) {
-        if (buf == NULL) {
-            fprintf(stderr, "not enough memory for %zu bytes\n", size);
-            free(buf0);
-            exit(ERR_INPUT);
-        }
-        nread = fread(buf + pos, 1, size - pos - 1, input_file);
-        if (nread == 0)
-            break;
-        pos += nread;
-        /* Grow the buffer size exponentially (Fibonacci ratio) */
-        if (size - pos < size / 2) {
-            size += size / 2 + size / 8;
-            buf0 = buf;
-            buf = realloc(buf, size);
-            if (buf == NULL) {
-                fprintf(stderr, "not enough memory for %zu bytes\n", size);
-                free(buf0);
-                exit(ERR_INPUT);
-            }
-        }
-    }
-    buf[pos] = '\0';
-    return buf;
-}
-
-// Check and acquire string from cJSON object
-char *get_json_string(const cJSON * const current_item, const char *tag)
-{
-    cJSON *object = cJSON_GetObjectItem(current_item, tag);
-
-    if (cJSON_IsString(object)) {
-        return cJSON_GetStringValue(object);
-    }
-    else {
-        fprintf(stderr, "get_json_string: invalid format, not a string");
-        exit(ERR_JSON);
-    }
-}
-
-// Check and acquire int from cJSON object
-int get_json_int(const cJSON * const current_item, const char *tag)
-{
-    cJSON *object = cJSON_GetObjectItem(current_item, tag);
-
-    if (cJSON_IsNumber(object)) {
-        return (int)cJSON_GetNumberValue(object);
-    }
-    else {
-        fprintf(stderr, "get_json_string: invalid format, not a number");
-        exit(ERR_JSON);
-    }
-}
-
-// Check and acquire int or null from cJSON object
-int get_json_int_or_null(const cJSON * const current_item, const char *tag)
-{
-    cJSON *object = cJSON_GetObjectItem(current_item, tag);
-
-    if (cJSON_IsNumber(object)) {
-        return (int)cJSON_GetNumberValue(object);
-    }
-    else if (cJSON_IsNull(object)) {
-        return 0;
-    }
-    else {
-        fprintf(stderr, "get_json_string: invalid format, not a number");
-        exit(ERR_JSON);
-    }
-}
-
-
-
-// Check and acquire NETADDR from cJSON object, dynamically allocated, must be freed
-NETADDR *get_json_netaddr(const cJSON * const current_item, const char *tag)
-{
-    NETADDR *addr;
-
-    cJSON *addr_object = cJSON_GetObjectItem(current_item, tag);
-
-    if (cJSON_IsObject(addr_object)) {
-        addr = malloc(sizeof(NETADDR));
-        if (addr == NULL) {
-            fprintf(stderr, "cannot allocate memory for addr");
-            exit(ERR_JSON);
-        }
-        addr->zone = get_json_int(addr_object, "zone");
-        addr->net = get_json_int(addr_object, "net");;
-        addr->node = get_json_int(addr_object, "node");;
-        addr->point = get_json_int_or_null(addr_object, "point");;
-
-        return addr;
-    }
-    else {
-        fprintf(stderr, "get_json_string: invalid format, not a string");
-        exit(ERR_JSON);
-    }
 }
 
 
@@ -301,16 +114,18 @@ int main(int argc, char *argv[])
     struct _minf msgapi_info;
     HAREA in_area;
     HMSG in_msg;
+    XMSG msg;
 
     // Set of messages
-    char *msg_string;
     cJSON *msg_json, *current_message;
     
     // Message attributes
     NETADDR *src_addr, *dst_addr;
-    char *from_name, *to_name, *snt_datetime, *rcv_datetime, *subj, *text;
+    char *from_name, *to_name, *snt_datetime, *rcv_datetime, *subj, *text, *ctrl;
 
     int num_messages, i;
+
+    dword ctrl_len, text_len, bytes_read;
 
     // Parse command line arguments
     struct arguments arguments;
@@ -333,12 +148,29 @@ int main(int argc, char *argv[])
     for(i = 1; i <= num_messages; i++ ) {
         in_msg = MsgOpenMsg(in_area, MOPEN_READ, i);
 
-        if (arguments.verbose) {
-            printf("Message %d\n", i);
-        }
+        ctrl_len = MsgGetCtrlLen(in_msg);
+        text_len = MsgGetTextLen(in_msg);
+
+        if ((ctrl = malloc(ctrl_len)) == NULL)
+            ctrl_len = 0;
+
+        if ((text = malloc(text_len)) == NULL)
+            text_len = 0;
+
+        bytes_read = MsgReadMsg(in_msg, &msg, 0, text_len, text, ctrl_len, ctrl);
+
+        if (arguments.verbose)
+            printf("Message %d, bytes read %d, control read %d\n", i, bytes_read, ctrl_len);
+
+        convert_message(in_msg, &msg, text_len, text, ctrl_len, ctrl);
+
+        if (text)
+            free(text);
+
+        if (ctrl)
+           free(ctrl);
 
         MsgCloseMsg(in_msg);
-
     }
 
     MsgUnlock(in_area);
